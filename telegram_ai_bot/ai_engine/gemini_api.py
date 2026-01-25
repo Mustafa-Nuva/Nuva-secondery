@@ -9,7 +9,10 @@ from ai_engine.base import BaseAIEngine
 
 
 _SYSTEM_INSTRUCTIONS = (
-    "You are an AI assistant for a Kurdish Telegram community. "
+    "You are a MEDICAL-ONLY AI assistant for a Kurdish Telegram community. "
+    "Your ONLY job is to provide general medical and health information. "
+    "Do NOT answer questions about programming, technology, school, business, or any non-medical topic. "
+    "If the user asks about something non-medical, politely say that you are only a medical assistant and cannot help with that topic. "
     "Base rules: "
     "Default language: Kurdish (Sorani). "
     "If the user writes in Kurdish, reply in Kurdish. "
@@ -21,19 +24,23 @@ _SYSTEM_INSTRUCTIONS = (
     "If the question is unclear, politely ask for clarification. "
     "If you are not sure, say you are not sure instead of guessing. "
     "Do not give harmful, illegal, or unsafe instructions. "
-    "Role: Your current role is a helpful general AI assistant for this Kurdish community. "
-    "You can answer questions about technology, education, daily life, and general information. "
-    "Tone & style: Friendly, respectful, and modern. Use natural, human-like language, not robotic. "
-    "Keep answers short and to the point, unless a longer explanation is really needed. "
+    "ROLE: You are a medical information assistant, NOT a doctor. "
+    "You can explain symptoms, conditions, lifestyle advice, and how treatments generally work, but only as general information. "
+    "Always remind the user that you are not a real doctor and that they must consult a qualified healthcare professional for diagnosis or treatment. "
+    "Never make a definitive diagnosis. Never prescribe or adjust medication. Never tell the user to stop or change medicine that a doctor has given. "
+    "If there is any sign of emergency (for example chest pain, difficulty breathing, signs of stroke, severe injury, suicidal thoughts, or anything very serious), "
+    "you MUST tell the user clearly to seek immediate emergency medical help or contact local emergency services. "
+    "Tone & style: Friendly, respectful, calm, and reassuring. Use natural, human-like language, not robotic. "
+    "Keep answers focused and not too long. Aim for medium-length answers, enough to be clear but not very long essays. "
     "In Sorani, use clear standard writing, not too much slang. "
-    "Behavior details: When the user asks for help, first understand the goal, then give practical steps. "
-    "If there are risks or limitations, mention them briefly. "
-    "For complex questions, structure your answer with short sections or bullet points. "
-    "Always adapt your answer to the user's language and their level: if they seem beginner, explain more simply. "
-    "IMPORTANT: You are NOT a replacement for a real doctor, lawyer, or certified professional. "
-    "For medical or legal issues, you can give general information only and advise them to see a professional. "
-    "Your task: Read the user's message, detect the user's language and reply in the same language, "
-    "decide what they want, and answer in a helpful, original way that matches the role above."
+    "Behavior details: When the user asks for help, first understand their main medical concern, then give simple explanations and practical, safe general advice. "
+    "If there are risks, uncertainty, or red flags, mention them and strongly recommend seeing a doctor. "
+    "For more complex questions, you can use short sections or bullet points, but do not make the answer very long. "
+    "Always adapt your answer to the user's language and level: if they seem beginner, explain more simply. "
+    "IMPORTANT: You are NOT a replacement for a real doctor or emergency service. You only give general medical information and always advise users to consult healthcare professionals. "
+    "Interaction mode: Assume the user only sends text chat messages. Ignore or politely refuse any request to handle images, voice messages, or other file uploads. "
+    "Your task: Read the user's message, detect their language and reply in the same language, focus ONLY on medical and health topics, "
+    "and give safe, clear, medium-length answers that follow all rules above."
 )
 
 
@@ -91,6 +98,108 @@ class GeminiAIEngine(BaseAIEngine):
         if not text:
             return ""
 
-        response = self._model.generate_content(text)
+        def _detect_language(s: str) -> str:
+            s = s.strip()
+            has_arabic = any("\u0600" <= ch <= "\u06FF" for ch in s)
+            has_latin = any("A" <= ch <= "Z" or "a" <= ch <= "z" for ch in s)
+
+            if has_latin and not has_arabic:
+                return "en"
+
+            if has_arabic:
+                kurdish_chars = "پچژگڵڕڤێۆ"
+                if any(ch in kurdish_chars for ch in s):
+                    return "ku"
+                return "ar"
+
+            return "en"
+
+        def _is_complicated_question(s: str) -> bool:
+            lower = s.lower()
+            keywords = [
+                "explain",
+                "step by step",
+                "treatment",
+                "management",
+                "what should i do",
+                "recommendation",
+                "recommendations",
+                "dose",
+                "dosage",
+                "diagnosis",
+                "diagnose",
+            ]
+            if any(k in lower for k in keywords):
+                return True
+
+            word_count = len(s.split())
+            if word_count > 40:
+                return True
+
+            if s.count("?") > 1:
+                return True
+
+            return False
+
+        def _needs_disclaimer(s: str) -> bool:
+            lower = s.lower()
+            keywords = [
+                "what should i do",
+                "should i",
+                "take this",
+                "take it",
+                "take the medicine",
+                "stop the medicine",
+                "start the medicine",
+                "treatment",
+                "management",
+                "dose",
+                "dosage",
+                "diagnosis",
+                "diagnose",
+                "recommend",
+                "recommendation",
+            ]
+            if any(k in lower for k in keywords):
+                return True
+
+            if "?" in s:
+                return True
+
+            return False
+
+        def _get_disclaimer(lang: str) -> str:
+            if lang == "ku":
+                return (
+                    "من یارمەتیدەری پزیشکییەکی زیرەکەم، ئەم زانیارییە جێگرەوەی ڕاوێژی پزیشک یان دەرمانساز نییە. "
+                    "تکایە بۆ بڕیارە پزیشکییە تایبەتییەکان ڕاوێژی پزیشک یان دەرمانساز بکە."
+                )
+            if lang == "ar":
+                return (
+                    "أنا مساعد طبي يعتمد على الذكاء الاصطناعي، وهذه المعلومات لا تُغني عن استشارة طبيب أو صيدلي مختص. "
+                    "يُرجى مراجعة مختص صحي لاتخاذ قرارات طبية شخصية."
+                )
+            return (
+                "I am a medical AI assistant, and this information does not replace advice from a real doctor or pharmacist. "
+                "Please consult a healthcare professional for personal medical decisions."
+            )
+
+        lang = _detect_language(text)
+
+        complicated = _is_complicated_question(text)
+        max_tokens = 500 if complicated else 250
+
+        response = self._model.generate_content(
+            text,
+            generation_config={
+                "max_output_tokens": max_tokens,
+            },
+        )
         reply: Optional[str] = getattr(response, "text", None)
-        return (reply or "").strip()
+        final_reply = (reply or "").strip()
+
+        if _needs_disclaimer(text) and final_reply:
+            disclaimer = _get_disclaimer(lang)
+            final_reply = f"{final_reply}\n\n{disclaimer}".strip()
+
+        return final_reply
