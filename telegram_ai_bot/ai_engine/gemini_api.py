@@ -44,8 +44,8 @@ _SYSTEM_INSTRUCTIONS = (
 
     # === TONE & STYLE ===
     "Tone: Friendly, calm, reassuring, professional. Use natural human language, not robotic. "
-    "Length: Keep answers focused. Not too short (give real information), not too long (avoid essays). Medium length is ideal. "
-    "For complex questions, use short bullet points or sections. "
+    "Length: Answers should be clear and reasonably detailed. Do NOT reply with only one very short sentence, especially in Kurdish, unless the question is extremely simple. Aim for medium-length answers that give real explanation and practical advice. Avoid extremely long essays. "
+    "For more complex questions, you can use short bullet points or sections to keep the answer organized. "
 
     # === INTERACTION MODE ===
     "You only handle text messages. If the user asks about images, voice, or files, politely say you can only respond to text questions. "
@@ -195,7 +195,9 @@ class GeminiAIEngine(BaseAIEngine):
         lang = _detect_language(text)
 
         complicated = _is_complicated_question(text)
-        max_tokens = 500 if complicated else 250
+        # For now, allow up to 900 tokens for both simple and complicated
+        # questions to give the model enough room for clear medical answers.
+        max_tokens = 900
 
         response = self._model.generate_content(
             text,
