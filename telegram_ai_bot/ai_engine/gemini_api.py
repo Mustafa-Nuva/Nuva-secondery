@@ -196,16 +196,8 @@ class GeminiAIEngine(BaseAIEngine):
         lang = _detect_language(text)
 
         complicated = _is_complicated_question(text)
-        # For now, allow up to 900 tokens for both simple and complicated
-        # questions to give the model enough room for clear medical answers.
-        max_tokens = 900
-
-        response = self._model.generate_content(
-            text,
-            generation_config={
-                "max_output_tokens": max_tokens,
-            },
-        )
+        # Let the model use its own default maximum output length (no manual cap).
+        response = self._model.generate_content(text)
         reply: Optional[str] = getattr(response, "text", None)
         final_reply = (reply or "").strip()
 
