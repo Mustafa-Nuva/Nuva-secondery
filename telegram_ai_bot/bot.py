@@ -15,6 +15,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext").setLevel(logging.WARNING)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message:
@@ -84,6 +88,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         reply = await asyncio.to_thread(ai_engine.generate_reply, user_text)
     except Exception:
+        logger.exception("AI engine generate_reply failed")
         await update.message.reply_text(
             "ببورە، کێشەیەک ڕوویدا لە وەڵامدانەوە. تکایە دواتر هەوڵ بدە."
         )
